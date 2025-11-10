@@ -121,3 +121,28 @@ Desenvolvido como parte do projeto **Desenvolvimento Rápido em Python** — 202
 ## 🧠 Licença
 
 Este projeto é de uso acadêmico e livre para estudo e modificação.
+---
+
+## 🗂️ Novidades nesta versão
+
+**Atualizações importantes (migração de esquema)**  
+- Banco migrado para novo modelo de dados conforme diagrama:
+  - **ALUNO** — `matricula (PK), nome, dt_nascimento`
+  - **DISCIPLINA** — `id (PK autoinc), nome, turno, sala, professor`
+  - **NOTA** — `id (PK autoinc), valor, matricula (FK), disciplina_id (FK)`
+- Mantivemos backup automático antes da migração: `dados/banco_backup_before_migration_YYYYMMDD_HHMMSS.db`
+- Tabelas antigas renomeadas como `*_old` após migração (ex: `alunos_old`) — disponíveis para verificação.
+
+**Arquivos novos adicionados**
+- `migrar_para_modelo_exato.py` — script de migração (faz backup automático e recria as tabelas no formato solicitado).
+- `criar_novo_schema.py` — script para criar o DDL do novo esquema (sem migração de dados).
+- Atualizações em: `database.py`, `alunos.py`, `disciplinas.py`, `notas.py` — agora usam `matricula` como chave primária do aluno e suportam os novos campos.
+
+---
+
+## 🧭 Como rodar (atualizado)
+
+1. Clone (ou baixe o ZIP):
+```bash
+git clone https://github.com/skiter352/cadastro_alunos_tkinter_sqlite.git
+cd cadastro_alunos_tkinter_sqlite
