@@ -21,6 +21,10 @@ class AlunosFrame(ttk.Frame):
         self.matricula = ttk.Entry(frm_inputs)
         self.matricula.grid(row=1, column=1, sticky='ew', padx=5)
 
+        ttk.Label(frm_inputs, text="Data Nasc (YYYY-MM-DD):").grid(row=2, column=0, sticky='w')
+        self.dt = ttk.Entry(frm_inputs)
+        self.dt.grid(row=2, column=1, sticky='ew', padx=5)
+
         frm_inputs.columnconfigure(1, weight=1)
 
         frm_buttons = ttk.Frame(self)
@@ -31,11 +35,14 @@ class AlunosFrame(ttk.Frame):
         ttk.Button(frm_buttons, text="Excluir", command=self.excluir).pack(side='left')
         ttk.Button(frm_buttons, text="Listar", command=self.listar).pack(side='left', padx=5)
 
-        cols = ("id", "nome", "matricula")
+        cols = ("matricula", "nome", "dt_nascimento")
         self.tree = ttk.Treeview(self, columns=cols, show='headings', height=10)
-        for c in cols:
-            self.tree.heading(c, text=c.capitalize())
-            self.tree.column(c, anchor='center')
+        self.tree.heading("matricula", text="Matrícula")
+        self.tree.heading("nome", text="Nome")
+        self.tree.heading("dt_nascimento", text="Dt Nasc")
+        self.tree.column("matricula", width=120, anchor='center')
+        self.tree.column("nome", anchor='w')
+        self.tree.column("dt_nascimento", width=110, anchor='center')
         self.tree.pack(fill='both', expand=True, pady=6)
 
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
@@ -44,21 +51,21 @@ class AlunosFrame(ttk.Frame):
         sel = self.tree.focus()
         if sel:
             vals = self.tree.item(sel, 'values')
-            self.nome.delete(0, 'end')
-            self.nome.insert(0, vals[1])
-            self.matricula.delete(0, 'end')
-            self.matricula.insert(0, vals[2])
+            self.matricula.delete(0, 'end'); self.matricula.insert(0, vals[0])
+            self.nome.delete(0, 'end'); self.nome.insert(0, vals[1])
+            self.dt.delete(0, 'end'); self.dt.insert(0, vals[2] if vals[2] is not None else "")
 
     def incluir(self):
         n = self.nome.get().strip()
         m = self.matricula.get().strip()
+        dt = self.dt.get().strip() or None
         if not validar_texto(n, m):
-            messagebox.showwarning("Atenção", "Preencha todos os campos")
+            messagebox.showwarning("Atenção", "Preencha nome e matrícula")
             return
         conn = conectar()
         cur = conn.cursor()
         try:
-            cur.execute("INSERT INTO alunos (nome, matricula) VALUES (?, ?)", (n, m))
+            cur.execute("INSERT INTO alunos (matricula, nome, dt_nascimento) VALUES (?, ?, ?)", (m, n, dt))
             conn.commit()
             messagebox.showinfo("Sucesso", "Aluno incluído")
             self.limpar_campos()
@@ -69,13 +76,12 @@ class AlunosFrame(ttk.Frame):
             conn.close()
 
     def listar(self):
-        for i in self.tree.get_children():
-            self.tree.delete(i)
+        for i in self.tree.get_children(): self.tree.delete(i)
         conn = conectar()
         cur = conn.cursor()
-        cur.execute("SELECT id, nome, matricula FROM alunos ORDER BY nome")
+        cur.execute("SELECT matricula, nome, dt_nascimento FROM alunos ORDER BY nome")
         for r in cur.fetchall():
-            self.tree.insert('', 'end', values=(r['id'], r['nome'], r['matricula']))
+            self.tree.insert('', 'end', values=(r['matricula'], r['nome'], r['dt_nascimento']))
         conn.close()
 
     def alterar(self):
@@ -84,16 +90,18 @@ class AlunosFrame(ttk.Frame):
             messagebox.showwarning("Atenção", "Selecione um aluno")
             return
         vals = self.tree.item(sel, 'values')
-        aluno_id = vals[0]
-        n = self.nome.get().strip()
+        old_matricula = vals[0]
         m = self.matricula.get().strip()
+        n = self.nome.get().strip()
+        dt = self.dt.get().strip() or None
         if not validar_texto(n, m):
-            messagebox.showwarning("Atenção", "Preencha todos os campos")
+            messagebox.showwarning("Atenção", "Preencha nome e matrícula")
             return
         conn = conectar()
         cur = conn.cursor()
         try:
-            cur.execute("UPDATE alunos SET nome=?, matricula=? WHERE id=?", (n, m, aluno_id))
+            # Se matrícula foi alterada, precisamos atualizar a PK (SQLite permite UPDATE PK)
+            cur.execute("UPDATE alunos SET matricula=?, nome=?, dt_nascimento=? WHERE matricula=?", (m, n, dt, old_matricula))
             conn.commit()
             messagebox.showinfo("Sucesso", "Aluno alterado")
             self.limpar_campos()
@@ -111,11 +119,11 @@ class AlunosFrame(ttk.Frame):
         if not confirmar_exclusao("aluno"):
             return
         vals = self.tree.item(sel, 'values')
-        aluno_id = vals[0]
+        matricula = vals[0]
         conn = conectar()
         cur = conn.cursor()
         try:
-            cur.execute("DELETE FROM alunos WHERE id=?", (aluno_id,))
+            cur.execute("DELETE FROM alunos WHERE matricula=?", (matricula,))
             conn.commit()
             messagebox.showinfo("Sucesso", "Aluno excluído")
             self.limpar_campos()
@@ -128,3 +136,4 @@ class AlunosFrame(ttk.Frame):
     def limpar_campos(self):
         self.nome.delete(0, 'end')
         self.matricula.delete(0, 'end')
+        self.dt.delete(0, 'end')

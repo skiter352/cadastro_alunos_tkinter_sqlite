@@ -8,38 +8,39 @@ def conectar():
     DB_PATH.mkdir(exist_ok=True)
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
+    # garantir foreign keys
+    conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
 def criar_tabelas():
     conn = conectar()
     cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS alunos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            matricula TEXT NOT NULL UNIQUE
-        )
-    """)
+    cursor.executescript("""
+    PRAGMA foreign_keys = ON;
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS disciplinas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            codigo TEXT NOT NULL UNIQUE
-        )
-    """)
+    CREATE TABLE IF NOT EXISTS alunos (
+        matricula TEXT PRIMARY KEY,
+        nome TEXT NOT NULL,
+        dt_nascimento TEXT
+    );
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS notas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            aluno_id INTEGER NOT NULL,
-            disciplina_id INTEGER NOT NULL,
-            nota REAL NOT NULL,
-            FOREIGN KEY(aluno_id) REFERENCES alunos(id),
-            FOREIGN KEY(disciplina_id) REFERENCES disciplinas(id)
-        )
-    """)
+    CREATE TABLE IF NOT EXISTS disciplinas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        turno TEXT,
+        sala TEXT,
+        professor TEXT
+    );
 
+    CREATE TABLE IF NOT EXISTS notas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        valor REAL NOT NULL,
+        matricula TEXT NOT NULL,
+        disciplina_id INTEGER NOT NULL,
+        FOREIGN KEY(matricula) REFERENCES alunos(matricula) ON DELETE CASCADE,
+        FOREIGN KEY(disciplina_id) REFERENCES disciplinas(id) ON DELETE CASCADE
+    );
+    """)
     conn.commit()
     conn.close()
 

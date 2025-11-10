@@ -12,7 +12,7 @@ class NotasFrame(ttk.Frame):
 
     def criar_widgets(self):
         frm_inputs = ttk.Frame(self)
-        frm_inputs.pack(fill='x')
+        frm_inputs.pack(fill='x', pady=4)
 
         ttk.Label(frm_inputs, text="Aluno:").grid(row=0, column=0, sticky='w')
         self.aluno_cb = ttk.Combobox(frm_inputs, state='readonly')
@@ -36,11 +36,13 @@ class NotasFrame(ttk.Frame):
         ttk.Button(frm_buttons, text="Excluir", command=self.excluir).pack(side='left')
         ttk.Button(frm_buttons, text="Listar", command=self.listar).pack(side='left', padx=5)
 
-        cols = ("id", "aluno", "disciplina", "nota")
+        cols = ("id", "valor", "matricula", "disciplina")
         self.tree = ttk.Treeview(self, columns=cols, show='headings', height=10)
-        for c in cols:
-            self.tree.heading(c, text=c.capitalize())
-            self.tree.column(c, anchor='center')
+        self.tree.heading("id", text="ID")
+        self.tree.heading("valor", text="Valor")
+        self.tree.heading("matricula", text="Matrícula")
+        self.tree.heading("disciplina", text="Disciplina")
+        self.tree.column("id", width=60, anchor='center')
         self.tree.pack(fill='both', expand=True, pady=6)
 
         self.tree.bind("<<TreeviewSelect>>", self.on_select)
@@ -48,13 +50,14 @@ class NotasFrame(ttk.Frame):
     def carregar_combo(self):
         conn = conectar()
         cur = conn.cursor()
-        cur.execute("SELECT id, nome FROM alunos ORDER BY nome")
+        cur.execute("SELECT matricula, nome FROM alunos ORDER BY nome")
         alunos = cur.fetchall()
         cur.execute("SELECT id, nome FROM disciplinas ORDER BY nome")
         disciplinas = cur.fetchall()
         conn.close()
 
-        self.aluno_map = {f"{r['nome']} (id:{r['id']})": r['id'] for r in alunos}
+        # maps: display -> key
+        self.aluno_map = {f"{r['nome']} ({r['matricula']})": r['matricula'] for r in alunos}
         self.disc_map = {f"{r['nome']} (id:{r['id']})": r['id'] for r in disciplinas}
 
         self.aluno_cb['values'] = list(self.aluno_map.keys())
@@ -64,16 +67,13 @@ class NotasFrame(ttk.Frame):
         sel = self.tree.focus()
         if sel:
             vals = self.tree.item(sel, 'values')
-            # id, aluno, disciplina, nota
-            self.nota_entry.delete(0, 'end')
-            self.nota_entry.insert(0, vals[3])
-            # selecionar combos
-            aluno_key = next((k for k,v in self.aluno_map.items() if str(v)==str(vals[1])), None)
-            disc_key = next((k for k,v in self.disc_map.items() if str(v)==str(vals[2])), None)
-            if aluno_key:
-                self.aluno_cb.set(aluno_key)
-            if disc_key:
-                self.disc_cb.set(disc_key)
+            self.nota_entry.delete(0, 'end'); self.nota_entry.insert(0, vals[1])
+            # vals: id, valor, matricula, disciplina_name
+            # set combos by finding matching key
+            aluno_key = next((k for k,v in self.aluno_map.items() if v==vals[2]), None)
+            disc_key = next((k for k,v in self.disc_map.items() if v==vals[3] or str(v)==str(vals[3])), None)
+            if aluno_key: self.aluno_cb.set(aluno_key)
+            if disc_key: self.disc_cb.set(disc_key)
 
     def incluir(self):
         aluno_sel = self.aluno_cb.get()
@@ -87,12 +87,12 @@ class NotasFrame(ttk.Frame):
         except ValueError:
             messagebox.showwarning("Atenção", "Nota inválida")
             return
-        aluno_id = self.aluno_map[aluno_sel]
-        disc_id = self.disc_map[disc_sel]
+        aluno_id = self.aluno_map[aluno_sel]   # matricula
+        disc_id = self.disc_map[disc_sel]      # id
         conn = conectar()
         cur = conn.cursor()
         try:
-            cur.execute("INSERT INTO notas (aluno_id, disciplina_id, nota) VALUES (?, ?, ?)", (aluno_id, disc_id, nota_val))
+            cur.execute("INSERT INTO notas (valor, matricula, disciplina_id) VALUES (?, ?, ?)", (nota_val, aluno_id, disc_id))
             conn.commit()
             messagebox.showinfo("Sucesso", "Nota incluída")
             self.limpar_campos()
@@ -104,18 +104,19 @@ class NotasFrame(ttk.Frame):
             conn.close()
 
     def listar(self):
-        for i in self.tree.get_children():
-            self.tree.delete(i)
+        for i in self.tree.get_children(): self.tree.delete(i)
         conn = conectar()
         cur = conn.cursor()
-        cur.execute("SELECT n.id, n.aluno_id, n.disciplina_id, n.nota, a.nome as aluno_nome, d.nome as disc_nome "
-                    "FROM notas n "
-                    "JOIN alunos a ON a.id = n.aluno_id "
-                    "JOIN disciplinas d ON d.id = n.disciplina_id "
-                    "ORDER BY a.nome")
+        cur.execute("""
+            SELECT n.id, n.valor, n.matricula, n.disciplina_id, a.nome as aluno_nome, d.nome as disciplina_nome
+            FROM notas n
+            LEFT JOIN alunos a ON a.matricula = n.matricula
+            LEFT JOIN disciplinas d ON d.id = n.disciplina_id
+            ORDER BY a.nome
+        """)
         for r in cur.fetchall():
-            # insert id, aluno_id, disciplina_id, nota (shows ids internally)
-            self.tree.insert('', 'end', values=(r['id'], r['aluno_id'], r['disciplina_id'], r['nota']))
+            disp_disc = f"{r['disciplina_nome']} (id:{r['disciplina_id']})" if r['disciplina_nome'] else r['disciplina_id']
+            self.tree.insert('', 'end', values=(r['id'], r['valor'], r['matricula'], disp_disc))
         conn.close()
 
     def alterar(self):
@@ -141,7 +142,7 @@ class NotasFrame(ttk.Frame):
         conn = conectar()
         cur = conn.cursor()
         try:
-            cur.execute("UPDATE notas SET aluno_id=?, disciplina_id=?, nota=? WHERE id=?", (aluno_id, disc_id, nota_val, nota_id))
+            cur.execute("UPDATE notas SET valor=?, matricula=?, disciplina_id=? WHERE id=?", (nota_val, aluno_id, disc_id, nota_id))
             conn.commit()
             messagebox.showinfo("Sucesso", "Nota alterada")
             self.limpar_campos()
